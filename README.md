@@ -45,20 +45,13 @@ https://<your-ha-domain>/api/webhook/<webhook-id>
 
 ---
 
-## 2. Select your AI client
+## 2. Requirements
 
-<details open>
-<summary><b>🟦 Microsoft 365 Copilot (Cowork + Chat)</b> &nbsp;·&nbsp; Microsoft &nbsp;·&nbsp; <code>HTTP</code> &nbsp;·&nbsp; <i>this repository</i></summary>
-
-<br>
-
-Follow steps 3 to 7 below. Requirements:
+The following is required to make this plugin work:
 
 - A Microsoft 365 account with access to **Copilot Cowork** and/or **Copilot Chat** with agents
-- For the Chat agent: permission to install custom apps (Teams upload or Agents Toolkit sideloading), and a Microsoft 365 Copilot license, since agent actions don't run without one
+- For the Chat agent: A Microsoft 365 Copilot license, since agent actions don't run without one
 - **PowerShell 7** on Windows (the build script refuses Windows PowerShell 5.1, whose `Compress-Archive` can write invalid zip paths)
-
-</details>
 
 ---
 
@@ -83,18 +76,19 @@ flowchart LR
 
 ```
 ha-mcp-plugin\
-├── build.ps1              build script (requires PowerShell 7)
-├── config.json            webhook URL, version, Chat tool list  (never commit)
-├── config.example.json    same with a dummy URL, safe to commit
+├── build.ps1             build script (requires PowerShell 7)
+├── update-tools.ps1      optional: refresh the tool list from your server
+├── config.json           webhook URL, version, Chat tool list  (never commit)
+├── config.example.json   example config.json file, with a dummy URL
 ├── .gitignore
 └── src\
-    ├── manifest.json          uses {{VERSION}} and {{HA_WEBHOOK_URL}}
-    ├── declarativeAgent.json  Copilot Chat agent: instructions, starters
-    ├── ha-mcp-plugin.json  Copilot Chat agent: instructions, starters
-    ├── color.png              192×192 color icon
-    ├── outline.png            32×32 outline icon
+    ├── manifest.json           uses {{VERSION}} and {{HA_WEBHOOK_URL}}
+    ├── declarativeAgent.json   Copilot Chat agent: instructions, starters
+    ├── ha-mcp-plugin.json      Plugin manifest for the Copilot Chat agent's action
+    ├── color.png               192×192 color icon
+    ├── outline.png             32×32 outline icon
     └── tools\
-        └── ha-chat-tools.json   focused set of tools of your ha-mcp server
+        └── ha-chat-tools.json     focused set of tools of your ha-mcp server
         └── ha-cowork-tools.json   tools/list dump of your ha-mcp server
 ```
 
@@ -124,45 +118,25 @@ Copy `config.example.json` to `config.json` and fill it in:
 | `version` | App version (`x.y.z`). **Raise it on every build**, or Microsoft 365 won't pick up the change |
 | `chatTools` | Tools available to the Copilot Chat agent. Keep it to about 10 for reliable tool selection |
 
-### 4.3 Dump your server's tool list
+### 4.3 (Optional) Refresh the tool list
 
-Both Cowork's validator and the Chat agent need a tool description file. Generate it from your own server (PowerShell 7):
+The repository ships `src/tools/ha-cowork-tools.json`, a tool list from a recent ha-mcp version, so you can build right away.
+
+- **Cowork** ignores its content and discovers tools live from your server.
+- **Copilot Chat** pins the schemas of your `chatTools` from this file, so they must match your ha-mcp version.
+
+Refresh it from your own server when:
+
+- your ha-mcp version differs from the one the shipped file came from,
+- the build reports *chatTools not found*,
+- the Chat agent's tool calls fail after an ha-mcp update.
 
 ```powershell
-$url  = "https://<your-ha-domain>/api/webhook/<webhook-id>"
-$base = @{ "Accept" = "application/json, text/event-stream" }
-
-function Invoke-Mcp($body, $sid) {
-  $hdr = $base.Clone(); if ($sid) { $hdr["Mcp-Session-Id"] = $sid }
-  Invoke-WebRequest -Uri $url -Method Post -ContentType "application/json" `
-    -Headers $hdr -Body ($body | ConvertTo-Json -Depth 20 -Compress)
-}
-function Read-Mcp($r) {
-  $t = $r.Content
-  if ("$($r.Headers['Content-Type'])" -like "*event-stream*") {
-    $t = ($t -split "`n" | Where-Object { $_ -like "data:*" } |
-          ForEach-Object { $_.Substring(5).Trim() }) | Select-Object -Last 1
-  }
-  $t | ConvertFrom-Json -Depth 100
-}
-
-$init = Invoke-Mcp @{ jsonrpc="2.0"; id=1; method="initialize"; params=@{
-  protocolVersion="2025-06-18"; capabilities=@{}; clientInfo=@{ name="manifest-builder"; version="1.0" } } }
-$sid = $init.Headers["Mcp-Session-Id"] | Select-Object -First 1
-Invoke-Mcp @{ jsonrpc="2.0"; method="notifications/initialized" } $sid | Out-Null
-
-$tools = @(); $cursor = $null; $id = 2
-do {
-  $p = @{}; if ($cursor) { $p.cursor = $cursor }
-  $res = Read-Mcp (Invoke-Mcp @{ jsonrpc="2.0"; id=$id; method="tools/list"; params=$p } $sid)
-  $tools += $res.result.tools; $cursor = $res.result.nextCursor; $id++
-} while ($cursor)
-
-"Found $($tools.Count) tools"
-@{ tools = $tools } | ConvertTo-Json -Depth 100 | Set-Content src\tools\ha-cowork-tools.json -Encoding utf8
+Unblock-File .\update-tools.ps1   # once, after downloading
+.\update-tools.ps1
 ```
 
-Rerun it when an ha-mcp update renames or changes a tool listed in `chatTools`.
+The script reads `webhookUrl` from `config.json`, fetches the tool list from your server, keeps a backup (`ha-cowork-tools.json.bak`), and reports which tools were added or removed. It warns if a tool in `chatTools` no longer exists.
 
 ### 4.4 Build
 
