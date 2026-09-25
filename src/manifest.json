@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.28/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.28",
+  "version": "{{VERSION}}",
+  "id": "419ed34c-d9f3-4dba-b1a5-6f51a2e2c1e0",
+  "developer": {
+    "name": "Danny de Vries",
+    "websiteUrl": "https://homeassistant-ai.github.io/ha-mcp/",
+    "privacyUrl": "https://github.com/homeassistant-ai/ha-mcp/blob/master/PRIVACY.md",
+    "termsOfUseUrl": "https://github.com/homeassistant-ai/ha-mcp/blob/master/LICENSE"
+  },
+  "name": { "short": "Home Assistant", "full": "Home Assistant (ha-mcp) for Copilot Chat and Copilot Cowork" },
+  "description": {
+    "short": "Control and manage Home Assistant",
+    "full": "Connects Copilot Chat and Copilot Cowork to Home Assistant via ha-mcp: query states, control devices, and manage automations, scripts and dashboards."
+  },
+  "icons": { "color": "color.png", "outline": "outline.png" },
+  "accentColor": "#C0C0C0",
+  "agentConnectors": [
+    {
+      "id": "home-assistant",
+      "displayName": "Home Assistant",
+      "description": "Query entity states, control devices, and manage automations, scripts, helpers and dashboards in my Home Assistant.",
+      "toolSource": {
+        "remoteMcpServer": {
+          "mcpServerUrl": "{{HA_WEBHOOK_URL}}",
+          "mcpToolDescription": { "file": "tools/ha-cowork-tools.json" },
+          "authorization": { "type": "None" }
+        }
+      }
+    }
+  ],
+  "copilotAgents": {
+    "declarativeAgents": [
+      { "id": "homeAssistantAgent", "file": "declarativeAgent.json" }
+    ]
+  }
+}

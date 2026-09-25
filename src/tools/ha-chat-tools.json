@@ -1,0 +1,781 @@
+{
+  "tools": [
+    {
+      "_meta": {
+        "ha_mcp": {
+          "llm_api_exposed": true,
+          "pinned": false,
+          "policy": {
+            "enabled": false,
+            "live": false,
+            "rules": 0,
+            "deployment": "embedded"
+          }
+        },
+        "fastmcp": {
+          "tags": [
+            "History & Statistics"
+          ]
+        }
+      },
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Get Entity History or Statistics"
+      },
+      "description": "Get historical data from Home Assistant's recorder.\n\n**Sources:**\n- \"history\" (default): Raw state changes, ~10 day retention, full resolution\n- \"statistics\": Pre-aggregated data, permanent retention, requires state_class\n\n**Shared params:** entity_ids, start_time, end_time, limit, offset\n**History params:** minimal_response, significant_changes_only\n**Statistics params:** period, statistic_types\n\n**Default time range:** 24h for history, 30 days for statistics\n\n**Use ha_get_history (default) when:**\n- Troubleshooting why a value changed (\"Why was my bedroom cold last night?\")\n- Checking event sequences (\"Did my garage door open while I was away?\")\n- Analyzing recent patterns (\"What time does motion usually trigger?\")\n\n**Use ha_get_history(source=\"statistics\") when:**\n- Tracking long-term trends beyond 10 days (\"Energy use this month vs last month?\")\n- Computing period averages (\"Average living room temperature over 6 months?\")\n- Entities must have state_class (measurement, total, total_increasing)\n\n**WARNING:** limit and offset apply per entity (not globally across all entities).\nAll data is fetched from HA before slicing; limit/offset are client-side.\nWith multiple entity_ids, offset must be 0 — use a single entity_id for offset > 0.\nUse has_more and next_offset from the response to paginate.\nAdministrators can optionally enable recorder workload guardrails in Advanced\nsettings. When enabled, oversized entity/time workloads are rejected before the\nrecorder query is issued; narrow the time range or entity list to stay within\nthe budget. Calendar statistics may first read HA's configured timezone so the\nestimate follows local calendar boundaries.\n\n**Example -- history (default):**\n```python\nha_get_history(entity_ids=\"sensor.bedroom_temperature\", start_time=\"24h\")\nha_get_history(entity_ids=[\"sensor.temperature\", \"sensor.humidity\"], start_time=\"3d\", limit=500)\n# Default order=\"desc\" returns newest states first.\n# To paginate oldest-first, use order=\"asc\":\nha_get_history(entity_ids=\"sensor.temperature\", start_time=\"7d\", limit=100, offset=100, order=\"asc\")\n```\n\n**Example -- statistics:**\n```python\nha_get_history(source=\"statistics\", entity_ids=\"sensor.total_energy_kwh\", start_time=\"30d\", period=\"day\")\nha_get_history(source=\"statistics\", entity_ids=\"sensor.living_room_temperature\",\n               start_time=\"6m\", period=\"month\", statistic_types=[\"mean\", \"min\", \"max\"])\nha_get_history(source=\"statistics\", entity_ids=\"sensor.energy_kwh\",\n               start_time=\"30d\", period=\"5minute\", limit=100, offset=200)\n```",
+      "inputSchema": {
+        "properties": {
+          "entity_ids": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "description": "Entity ID(s) to query. Can be a single ID, comma-separated string, or JSON array."
+          },
+          "source": {
+            "default": "history",
+            "description": "Data source: \"history\" (default) for raw state changes (~10 day retention), or \"statistics\" for pre-aggregated long-term data (permanent, requires state_class).",
+            "enum": [
+              "history",
+              "statistics"
+            ],
+            "type": "string"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Start time: ISO datetime or relative (e.g., '24h', '7d', '30d'). Default: 24h ago for history, 30d ago for statistics"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "End time: ISO datetime. Default: now"
+          },
+          "minimal_response": {
+            "default": true,
+            "description": "Return only states/timestamps without attributes. Default: true. Ignored when source=\"statistics\"",
+            "type": "boolean"
+          },
+          "significant_changes_only": {
+            "default": true,
+            "description": "Filter to significant state changes only. Default: true. Ignored when source=\"statistics\"",
+            "type": "boolean"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Max entries per entity. Default: 100, Max: 1000. For source=\"history\": state changes. For source=\"statistics\": aggregated rows. With multiple entity_ids, offset must be 0 and total rows returned can reach limit × len(entity_ids)."
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Number of entries to skip per entity for pagination. Default: 0. Offset > 0 requires a single entity_id. Use with limit and has_more/next_offset in the response."
+          },
+          "period": {
+            "default": "day",
+            "description": "Aggregation period: \"5minute\", \"hour\", \"day\", \"week\", \"month\", \"year\". Default: \"day\". Ignored when source=\"history\"",
+            "type": "string"
+          },
+          "statistic_types": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Statistics types: \"mean\", \"min\", \"max\", \"sum\", \"state\", \"change\". Default: all. Ignored when source=\"history\""
+          },
+          "order": {
+            "default": "desc",
+            "description": "Sort order for history entries. \"desc\" (default): newest first. \"asc\": oldest first (chronological, as returned by HA API). Ignored when source=\"statistics\".",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Return only the specified top-level response keys to reduce response size. None = full response (default). History keys: success, source, entities, period, query_params. Statistics keys: success, source, entities, period_type, time_range, statistic_types, query_params, warnings."
+          }
+        },
+        "required": [
+          "entity_ids"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "name": "ha_get_history",
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "title": "Get Entity History or Statistics"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": [
+            "Search & Discovery"
+          ]
+        },
+        "ha_mcp": {
+          "llm_api_exposed": true,
+          "pinned": true,
+          "policy": {
+            "enabled": false,
+            "live": false,
+            "rules": 0,
+            "deployment": "embedded"
+          }
+        }
+      },
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": true,
+        "title": "Get System Overview"
+      },
+      "description": "Get AI-friendly system overview with intelligent categorization.\n\nReturns comprehensive system information at the requested detail level,\nincluding Home Assistant base_url, version, location, timezone, entity overview,\nand active persistent notifications (if any).\nUse 'minimal' (default) for most queries. Domain counts and states_summary\nare always complete regardless of entity pagination.\nStandard/full modes paginate entities (default 200 per page) — use offset\nto fetch more. Use 'domains' filter to narrow scope.\n\nUse fields= to project the response to only the keys you need — a\nsignificantly smaller payload when fetching a single sub-section (e.g.\nfields=[\"system_info\"] returns just that section instead of the full overview).\nRequests composed only of system_info, notification, repair, or server\nmetadata fields also skip the unrelated state, service, and registry reads.\n\nDo not use this tool to inspect a known entity or a narrow set of entities.\nUse ha_get_state for one entity, ha_get_entity for registry metadata, or\nha_search with a domain or area filter. An unprojected overview collects\nsystem-wide state, service, and registry data and can be expensive on large\nHome Assistant installations.\n\nWhen (and only when) the ha-mcp settings-UI sidecar is running\n(stdio mode, e.g. Claude Desktop / Claude Code), the response\nincludes a ``settings_url`` field — the local URL to the\ntool-configuration page. Hand this URL to the user when they\nask how to enable or disable tools or change server settings.\n``settings_url`` is emitted regardless of ``fields=``\nprojection (so it stays discoverable even when callers\nminimize the response) but only when the sidecar URL file\nactually exists.\n\nIn standalone HTTP / Docker modes, when an HTTP settings prefix is\nadvertised, there is no sidecar URL file and the server can't know its\nexternally reachable host. The response instead carries a\n``settings_url_hint`` string telling the user where the page is mounted\nand how to find or construct the full URL.\nHand whichever of the two fields is present to the user.\n\nThe response also carries an ``ha_mcp_update`` object\n``{current, latest, update_available}`` reporting whether a newer ha-mcp\nrelease is available (PyPI for pip/Docker, the Supervisor add-on store\nfor the add-on) — proactively tell the user when ``update_available`` is\ntrue. Emitted regardless of ``fields=``; omitted only for the\n``unknown`` version and when ``HA_MCP_DISABLE_UPDATE_CHECK`` is set.",
+      "inputSchema": {
+        "properties": {
+          "detail_level": {
+            "default": "minimal",
+            "description": "'minimal': 10 entities/domain, top-5 states (default); 'standard': 200 entities/page, top-10 states (use offset for more); 'full': 200 entities/page + entity_id + state + full states. Use 'domains', 'limit', or max_entities_per_domain to control size",
+            "enum": [
+              "minimal",
+              "standard",
+              "full"
+            ],
+            "type": "string"
+          },
+          "domains": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Filter to specific domains (e.g. 'light,sensor' or ['light','sensor']). None = all domains. Useful to avoid context window overload."
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Max total entities across all domains (default: unlimited for minimal, 200 for standard/full). Counts and states always complete. Use with offset for pagination."
+          },
+          "offset": {
+            "default": 0,
+            "description": "Number of entities to skip for pagination (default: 0)",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_entities_per_domain": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Override default entity cap per domain (minimal=10, standard/full=unlimited). 0 = no limit on entities or states."
+          },
+          "include_state": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Include state field for entities (None = auto based on level). Full defaults to True."
+          },
+          "include_entity_id": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Include entity_id field for entities (None = auto based on level). Full defaults to True."
+          },
+          "include_notifications": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": true,
+            "description": "Include active persistent notifications (default: True). Set False to skip."
+          },
+          "include_dismissed_repairs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": false,
+            "description": "Include user-dismissed/ignored repairs (default: False). Matches the HA Repairs UI which hides dismissed items by default. To dismiss/ignore a repair, call ha_call_service with ws_command=\"repairs/ignore_issue\" and data={\"domain\": ..., \"issue_id\": ..., \"ignore\": true}."
+          },
+          "fields": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Return only the specified top-level response keys to reduce response size (e.g. [\"system_info\", \"domain_stats\"]). None = full response (default). Available keys: success, system_summary, domain_stats, area_analysis, ai_insights, pagination, partial, warnings, device_types, service_availability, system_info, notification_count, notifications, repair_count, dismissed_repair_count, repairs, repairs_error, tool_discovery, settings_url, settings_url_hint, read_only_mode, read_only_mode_hint, ha_mcp_update. Note: ``settings_url`` (stdio mode), ``settings_url_hint`` (standalone HTTP/Docker mode), the ``read_only_mode`` / ``read_only_mode_hint`` pair (only while Read Only Mode is on), and ``ha_mcp_update`` (when an update check applies) are emitted regardless of ``fields=`` projection so the settings page, the active mode, and a newer ha-mcp release stay discoverable; see the tool description."
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "name": "ha_get_overview",
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "title": "Get System Overview"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": [
+            "Search & Discovery"
+          ]
+        },
+        "ha_mcp": {
+          "llm_api_exposed": true,
+          "pinned": false,
+          "policy": {
+            "enabled": false,
+            "live": false,
+            "rules": 0,
+            "deployment": "embedded"
+          }
+        }
+      },
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Get Entity State"
+      },
+      "description": "Get current status, state, and attributes of one or more entities (lights, switches, sensors, climate, covers, locks, fans, etc.).\n\nSINGLE ENTITY:\nPass a string entity_id. Returns the entity's full state and attributes.\n\nMULTIPLE ENTITIES:\nPass a list of entity IDs (max 100). Efficiently retrieves states using\nparallel requests. Duplicates are automatically deduplicated.\nReturns success=True if at least one entity state was retrieved.\nCheck 'error_count' for any failed lookups in partial-success scenarios.\n\nFIELDS PROJECTION:\n`fields=` projects the per-entity record keys (see the fields= parameter\ndescription for the full key list), NOT the outer bulk response wrapper.\nIn single-entity mode it filters keys of the returned record directly. In bulk\nmode it filters keys of each record inside `states[entity_id]`; outer keys\n(`success`, `count`, `states`, `errors`, ...) are always preserved.\n`attribute_keys=` further narrows the `attributes` sub-dict and is only applied\nwhen `\"attributes\"` is in `fields=` (or `fields=None`); otherwise it is a no-op.\n\nWhen `attribute_keys=` is set but has no effect (because `attributes` was\nexcluded by `fields=`), a `warnings` list is emitted outside the projected\nentity record(s): in bulk mode at the response wrapper level (sibling of\n`success`/`count`/`states`); in single-entity mode at the top-level result\n(sibling of `data`/`metadata`, since the projected record IS `data`).\nThe warnings list is never a record key, so `fields=[\"state\"]` returns a\nrecord with only `state` regardless of whether the no-effect warning fires.\n\nEXAMPLES:\n- Single: ha_get_state(\"light.kitchen\")\n- Multiple: ha_get_state([\"light.kitchen\", \"light.living_room\", \"sensor.temperature\"])\n- State only: ha_get_state(\"light.kitchen\", fields=[\"state\"])\n- Slim bulk: ha_get_state([\"light.kitchen\", \"sensor.temperature\"], fields=[\"state\", \"attributes\"], attribute_keys=[\"brightness\"])\n\nget current state value single entity check status bulk multiple states",
+      "inputSchema": {
+        "properties": {
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "description": "Entity ID or list of entity IDs to retrieve state for (e.g., 'light.kitchen' or ['light.kitchen', 'sensor.temperature'])"
+          },
+          "fields": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Return only the specified top-level entity record keys to reduce response size (e.g. [\"state\", \"attributes\"]). None = full entity record (default). Available keys: entity_id, state, attributes, last_changed, last_reported, last_updated, context."
+          },
+          "attribute_keys": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Return only the specified keys from each entity's attributes dict (e.g. [\"brightness\", \"color_temp_kelvin\"] for lights). None = full attributes (default). Unknown keys are silently dropped. Requires \"attributes\" to be present in fields= (or fields=None)."
+          }
+        },
+        "required": [
+          "entity_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "name": "ha_get_state",
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "title": "Get Entity State"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": [
+            "Search & Discovery"
+          ]
+        },
+        "ha_mcp": {
+          "llm_api_exposed": true,
+          "pinned": true,
+          "policy": {
+            "enabled": false,
+            "live": false,
+            "rules": 0,
+            "deployment": "embedded"
+          }
+        }
+      },
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Search"
+      },
+      "description": "Search for entities (lights, sensors, switches, climate, etc.) by name, domain, or area — AND inside automation/script/scene/helper/dashboard configurations — in one call.\n\nTwo surfaces run in parallel and return tagged results:\n  - **entities**: entity-registry matches (entity_id, friendly name,\n    area). Filter with `domain_filter`/`area_filter`/`state_filter`;\n    omit `query` to enumerate a domain, area, or state.\n  - **automations / scripts / scenes / helpers / dashboards**: matches\n    *inside* config definitions — triggers, actions, sequences, scene\n    entity-sets, helper bodies, dashboard cards. Driven by `query`;\n    narrow with `search_types`.\n\nUse this whenever you need to find something in HA without deciding\nentity-name vs config-body search up front.\n\nFor control requests with exclusions such as \"except\", \"excluding\", or\n\"but not\", include `is_group` and `member_entity_ids` in `result_fields`.\nDo not control an aggregate whose members include an excluded entity;\nprefer leaf entities when the exception cannot be verified safely.\nA withheld member list still returns is_group=true; absence of\nmember_entity_ids must not be interpreted as a leaf entity.\n\nWhen NOT to use:\n  - To read a known entity_id's state: use `ha_get_state` (cheaper).\n  - To inspect one automation/script/scene config by id: use the\n    matching `ha_config_get_*`.\n  - To list installed Apps (add-ons): use `ha_get_app`.\n\nConfig-body search is skipped when `domain_filter`/`area_filter`/\n`state_filter` signal entity-only intent (keeping name lookups off the\nexpensive backend); a `warnings[]` entry names the skip. Pass\n`search_types=[...]` to force config search.\n\nCaveats:\n  - `partial: True` means results are NOT exhaustive — a surface raised,\n    or the config-body branch lost data (per-id time budget exhausted,\n    an individual fetch failed, or a helper-type list fetch failed).\n    Empty buckets with `partial: True` mean \"search failed\", not \"no\n    results\". The cause is in `partial_reason`, also mirrored into\n    `warnings[]` with an \"incomplete results: \" prefix. Do not treat a\n    partial response as complete.\n  - `count` is items in this response (post-pagination), not corpus\n    totals — use `entity_total_matches` + `config_total_matches`.\n  - `limit`/`offset` apply per-surface. Flat `has_more`/`next_offset`\n    page the next call (iterate `offset = next_offset`); per-surface\n    `entity_*`/`config_*` variants show which surface still has results.\n\nFor parameters, schema, and worked examples, see ha_get_skill_guide.\n\nExamples:\n    - List sensors in an area: ha_search(domain_filter=\"sensor\", area_filter=\"Living Room\")\n    - Find a light by name: ha_search(\"kitchen\", domain_filter=\"light\")\n    - Find lights safely before an \"all except one\" control request:\n      ha_search(\"living room\", domain_filter=\"light\",\n      result_fields=[\"entity_id\", \"friendly_name\", \"is_group\",\n      \"member_entity_ids\"])\n    - Which automations use an entity: ha_search(\"light.bed_light\")\n    - Scenes touching a light: ha_search(\"light.kitchen\", search_types=[\"scene\"])\n    - Narrow the response to the entity bucket: ha_search(\"kitchen\", fields=[\"entities\"])\n    - All unavailable entities: ha_search(state_filter=\"unavailable\")\n\nfind entities configs lookup discover search lights sensors switches covers climate fans media_player binary_sensor device_tracker person weather automation script helper input_boolean input_number automations scripts scenes helpers dashboards",
+      "inputSchema": {
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "What to search for (entity name fragment, free-text config term, entity_id). Searches BOTH the entity registry (entity_ids, friendly names, areas) AND configuration bodies (automation triggers/actions, script sequences, scene contents, helper bodies, dashboard cards) in one call. Use this for any find-something-in-HA question — entity OR config. Pass the exact entity_id, not a name fragment, when checking what a rename or delete would break: that form reports automations, scripts and scenes referencing it even when their configuration could not be read. Omit `query` to enumerate by `domain_filter`, `area_filter`, and/or `state_filter` alone (registry-listing mode); configuration-body search is skipped in that mode because there is no term to match against."
+          },
+          "domain_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Narrow entity-registry results to a single domain (e.g. 'light', 'sensor'). Does not affect configuration search."
+          },
+          "area_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Narrow entity-registry results to an area (id, name, or alias), an exact floor (id, name, or alias), or an unambiguous close-spelling floor match; a floor match expands to all areas on that floor. Does not affect configuration search."
+          },
+          "search_types": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Configuration types to include in body search: 'automation', 'script', 'scene', 'helper', 'dashboard'. Default = automation+script+scene+helper. Pass as list or JSON-array string."
+          },
+          "limit": {
+            "default": 10,
+            "description": "Maximum results per surface (entities, configs). Default: 10.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Number of results to skip for pagination.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "exact_match": {
+            "default": true,
+            "description": "Exact substring matching (default). Set False for fuzzy matching when the query may have typos.",
+            "type": "boolean"
+          },
+          "include_hidden": {
+            "default": true,
+            "description": "Include hidden entities in registry results (with a score penalty so they sort below visible matches). Set False to exclude entirely.",
+            "type": "boolean"
+          },
+          "include_config": {
+            "default": false,
+            "description": "Include full configuration bodies in body-search results. Default: False (summary only).",
+            "type": "boolean"
+          },
+          "group_by_domain": {
+            "default": false,
+            "description": "Group entity-registry results by domain (entity-side only). Adds a `by_domain` map to the response.",
+            "type": "boolean"
+          },
+          "per_domain_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "When `group_by_domain=True`, cap entity-registry results per domain to this number. Ignored otherwise."
+          },
+          "state_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Filter entity-registry results to a specific state (e.g. \"on\", \"off\", \"unavailable\"). Case-insensitive. Can be used standalone (no query/domain/area) to enumerate every entity in that state; entity_total_matches reflects the filtered count."
+          },
+          "result_fields": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Project each entity-registry record to only the specified keys (e.g. [\"entity_id\", \"state\"]). None = full records. Base keys: entity_id, friendly_name, domain, state, score, match_type. Opt-in enrichment/membership keys (computed on request): area, floor, labels, aliases, is_group, member_entity_ids. Membership is recognized only when HA explicitly exposes a valid group_entities or legacy entity_id collection; member IDs are sorted, direct (not recursively expanded), and omitted if visibility/include_hidden excludes a member. is_group remains true when member IDs are withheld; requesting member_entity_ids also retains is_group. An unknown key is rejected."
+          },
+          "fields": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Project the response to the named top-level keys (e.g. [\"entities\", \"automations\"]); None = full response. Diagnostic / pagination keys are always retained so projection cannot hide partial / error state. Distinct from `result_fields` (which projects each entity record's keys). Available keys: success, query, entities, automations, scripts, scenes, helpers, dashboards, search_types, search_type, entity_total_matches, config_total_matches, count, offset, limit, has_more, next_offset, entity_has_more, entity_next_offset, config_has_more, config_next_offset, by_domain, state_filter_note, area_names, domain_filter, area_filter, message, warnings, errors, partial, partial_reason."
+          },
+          "config_time_budget": {
+            "anyOf": [
+              {
+                "maximum": 300,
+                "minimum": 0.001,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Per-call override for the per-id config-fetch wall-clock budget (seconds). Replaces the per-type HAMCP_*_CONFIG_TIME_BUDGET defaults for the automation, script, AND scene branches. Use when a `partial: True` response names time-budget skipping. Stateless per-call: one caller raising the budget doesn't affect others. None = use the per-type env defaults."
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "name": "ha_search",
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "title": "Search"
+    },
+    {
+      "_meta": {
+        "ha_mcp": {
+          "llm_api_exposed": true,
+          "pinned": false,
+          "policy": {
+            "enabled": false,
+            "live": false,
+            "rules": 0,
+            "deployment": "embedded"
+          }
+        },
+        "fastmcp": {
+          "tags": [
+            "Service & Device Control"
+          ]
+        }
+      },
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Call Service"
+      },
+      "description": "Execute Home Assistant services to control entities and trigger automations.\n\nThis is the universal tool for controlling all Home Assistant entities. Services follow\nthe pattern domain.service (e.g., light.turn_on, climate.set_temperature).\n\n**Basic Usage:**\n```python\n# Turn on a light\nha_call_service(\"light\", \"turn_on\", entity_id=\"light.living_room\")\n\n# Set temperature with parameters\nha_call_service(\"climate\", \"set_temperature\",\n              entity_id=\"climate.thermostat\", data={\"temperature\": 22})\n\n# Trigger automation\nha_call_service(\"automation\", \"trigger\", entity_id=\"automation.morning_routine\")\n\n# Universal controls work with any entity\nha_call_service(\"homeassistant\", \"toggle\", entity_id=\"switch.porch_light\")\n```\n\n**Key behavior:**\n- **Result compaction (default ON)**: ``result`` is trimmed\n  to the targeted entity's record (drops parent-group propagation) and\n  stripped of ``context`` / ``last_*`` metadata and heavy attribute\n  lists (``effect_list``, ``hue_scenes``). Escape hatches: ``verbose=True``\n  for the raw changed-state records, or ``result_fields`` /\n  ``result_attribute_keys`` for explicit per-record projection (mirrors\n  ``ha_get_state``).\n\n**For detailed service documentation, use ha_get_skill_guide.**\n\nCommon patterns: Use ha_get_state() to check current values before making changes.\nUse ha_search() to find correct entity IDs.\n\n**WebSocket command escape hatch (advanced):**\nA few Home Assistant operations are WebSocket-only commands, not\nregistered services — most notably dismissing a Repairs issue. Pass\n``ws_command`` (instead of domain/service) to send one, with its\nparameters in ``data``:\n```python\n# Dismiss a repair (get domain/issue_id from ha_get_overview repairs\n# or ha_get_system_health include=\"repairs\")\nha_call_service(ws_command=\"repairs/ignore_issue\",\n                data={\"domain\": \"sun\", \"issue_id\": \"abc\", \"ignore\": True})\n```\nOnly one-shot request/response commands are supported; streaming/two-phase\nand service-invoking commands are rejected, and the other service\nparameters (entity_id, return_response, etc.) don't apply.\n\nUnavailable in Read Only Mode, including read-like services and WebSocket\ncommands. Use dedicated read tools while that mode is enabled.",
+      "inputSchema": {
+        "properties": {
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Service domain (e.g. 'light', 'climate', 'automation'). Required for a service call; must be omitted when ws_command is set."
+          },
+          "service": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Service name within domain (e.g. 'turn_on', 'set_temperature', 'trigger'). Required for a service call; must be omitted when ws_command is set."
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Entity ID(s) the service call targets — one ID ('light.living_room') or several comma-separated ('light.a,light.b'). Optional for services that don't target a specific entity. Must be omitted when ws_command is set."
+          },
+          "data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Extra service-call parameters beyond entity_id (e.g. {'temperature': 22} for climate.set_temperature). Also carries the raw command payload when ws_command is set. If entity_id is also present in data, the entity_id parameter wins."
+          },
+          "return_response": {
+            "default": false,
+            "description": "If True, the service's response data is returned once, as the top-level 'service_response' key — never nested inside 'result' (default: False). Must stay False when ws_command is set.",
+            "type": "boolean"
+          },
+          "wait": {
+            "default": true,
+            "description": "If True (default), wait for the entity state to change before returning. Applies only to state-changing services called with a single entity_id. A comma-separated multi-target does not get confirmed by this: it falls through to a legacy path that polls for the literal composite entity_id and times out after 10s. Set wait=False for multi-target calls.",
+            "type": "boolean"
+          },
+          "verbose": {
+            "default": false,
+            "description": "Return HA's raw changed-state records unchanged (default: False). Use as an escape hatch when you need the full propagation chain or raw attribute payload (debug / inspection). With return_response=True the response data still surfaces once as the top-level service_response key, never nested in result. WARNING: brings back token-bloat for nested-group targets — prefer result_fields / result_attribute_keys for targeted control.",
+            "type": "boolean"
+          },
+          "result_fields": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Project each record in 'result' to only these top-level keys (e.g. ['entity_id', 'state']). Mirrors ha_get_state's fields=. Setting this DISABLES default compaction — no entity-id filter, no metadata strip — and applies the explicit projection instead."
+          },
+          "result_attribute_keys": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Project each record's 'attributes' dict to only these keys (e.g. ['brightness', 'rgb_color']). Mirrors ha_get_state's attribute_keys=. Setting this DISABLES default compaction. Requires 'attributes' to be present in result_fields (or result_fields=None)."
+          },
+          "ws_command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Advanced escape hatch: send a raw one-shot Home Assistant WebSocket command that is NOT a registered service (e.g. 'repairs/ignore_issue' to dismiss a Repairs issue). When set, omit domain/service and the other service params; put the command's parameters in data. Streaming/two-phase and service-invoking commands (call_service, execute_script) are rejected."
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "name": "ha_call_service",
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "title": "Call Service"
+    }
+  ]
+}

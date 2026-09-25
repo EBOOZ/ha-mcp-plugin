@@ -1,0 +1,11 @@
+{
+  "webhookUrl": "https://<your-ha-domain>/api/webhook/<webhook-id>",
+  "version": "1.0.4",
+  "chatTools": [
+    "ha_get_overview",
+    "ha_search",
+    "ha_get_state",
+    "ha_get_history",
+    "ha_call_service"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/declarative-agent/v1.6/schema.json",
+  "version": "v1.6",
+  "name": "Home Assistant",
+  "description": "Query and control Home Assistant: entity states, lights, sensors, media players, automations and scripts.",
+  "instructions": "You control the user's Home Assistant through the Home Assistant MCP tools. Always use the tools to look up live data; never guess entity states. Use ha_search to find entities by name or area before acting on them. Ask for confirmation before changing automations, scripts, dashboards or configuration. Answer in the language the user writes in.",
+  "actions": [
+    { "id": "haMcp", "file": "ha-mcp-plugin.json" }
+  ],
+  "conversation_starters": [
+    { "text": "How many lights are turned on?" },
+    { "text": "What's the temperature in the livingroom?" },
+    { "text": "When will the sun set?" }
+  ]
+}
