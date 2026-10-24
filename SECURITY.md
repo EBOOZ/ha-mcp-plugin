@@ -10,7 +10,7 @@ Please **do not** open public issues for vulnerabilities.
 Report privately via:
 
 - GitHub Security Advisories (**preferred**)  
-- security@example.com (replace with your real address)
+- github[at]ebooz.nl
 
 Include impact, reproduction steps, and affected version(s).
 
