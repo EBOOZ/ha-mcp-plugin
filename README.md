@@ -20,7 +20,7 @@
 | **Copilot Chat** | A **Home Assistant** agent in the agents pane | A pinned, focused set (configurable) |
 
 1. Run ha-mcp with a **remote HTTPS webhook URL** ([step 1](#1-how-is-your-mcp-server-running) and [step 3](#3-local-or-remote-access)).
-2. Put that URL in `config.json` and run `.\build.ps1` ([step 4](#4-configure-and-build)).
+2. Open the **[web configurator](https://ebooz.github.io/ha-mcp-plugin/)**, paste that URL and download `ha-mcp-plugin.zip` ([step 4](#4-configure-and-build)). No scripts needed.
 3. Upload `ha-mcp-plugin.zip` in Cowork, and install it for Copilot Chat ([step 5](#5-install)).
 
 ---
@@ -51,7 +51,7 @@ The following is required to make this plugin work:
 
 - A Microsoft 365 account with access to **Copilot Cowork** and/or **Copilot Chat** with agents
 - For the Chat agent: A Microsoft 365 Copilot license, since agent actions don't run without one
-- **PowerShell 7** on Windows (the build script refuses Windows PowerShell 5.1, whose `Compress-Archive` can write invalid zip paths)
+- A modern browser for the [web configurator](#41-web-configurator-no-scripts), **or** **PowerShell 7** on Windows for the [scripts](#42-project-layout) (the build script refuses Windows PowerShell 5.1, whose `Compress-Archive` can write invalid zip paths)
 
 ---
 
@@ -72,10 +72,34 @@ flowchart LR
 
 ## 4. Configure and build
 
-### 4.1 Project layout
+There are two ways to build the package. Both produce the same `ha-mcp-plugin.zip`:
+
+- **Web configurator**: fill in a form in your browser and download the zip. Recommended.
+- **PowerShell scripts**: `build.ps1` and `update-tools.ps1`, for automation or offline use ([4.2](#42-project-layout) onwards).
+
+### 4.1 Web configurator (no scripts)
+
+Open **https://ebooz.github.io/ha-mcp-plugin/** and:
+
+1. Paste your **webhook URL**
+2. Check the **version**. It suggests one higher than your last download
+3. Pick the **Copilot Chat tools** (the defaults from `config.example.json` are preselected and listed first)
+4. Select **Download ha-mcp-plugin.zip**, then [install](#5-install) it
+
+The page builds the zip in your browser with the same logic as `build.ps1`. The webhook URL isn't uploaded anywhere. It's only sent to your own server, and only when you select **Load tools from my server**. Your version and tool choice are remembered in the browser, and so is the URL if you tick **Remember the URL in this browser**.
+
+**Tool list:** the page uses the bundled `src/tools/ha-cowork-tools.json` by default (see [4.4](#44-optional-refresh-the-tool-list) for when that matters). To use your own server's list:
+
+- **Load tools from my server** fetches it live. Home Assistant usually blocks browser requests from other websites (CORS), in which case the page says so and keeps the bundled list.
+- **Upload a tools file** accepts a file made with `update-tools.ps1` (or any `tools/list` dump with a `tools` array).
+
+**Running it yourself:** the page is the `index.html` in the root of this repository, served by GitHub Pages (**Settings → Pages → Deploy from a branch → `main` / root**). To use it locally, run `python -m http.server` in the repository folder and open `http://localhost:8000`. Opening `index.html` as a file doesn't work, because browsers block it from reading the files in `src`.
+
+### 4.2 Project layout
 
 ```
 ha-mcp-plugin\
+├── index.html            web configurator (GitHub Pages)
 ├── build.ps1             build script (requires PowerShell 7)
 ├── update-tools.ps1      optional: refresh the tool list from your server
 ├── config.json           webhook URL, version, Chat tool list  (never commit)
@@ -94,7 +118,7 @@ ha-mcp-plugin\
 
 `ha-mcp-plugin.json` and `tools/ha-chat-tools.json` are **generated** by the build. Don't create them in `src`.
 
-### 4.2 Configure
+### 4.3 Configure
 
 Copy `config.example.json` to `config.json` and fill it in:
 
@@ -118,7 +142,7 @@ Copy `config.example.json` to `config.json` and fill it in:
 | `version` | App version (`x.y.z`). **Raise it on every build**, or Microsoft 365 won't pick up the change |
 | `chatTools` | Tools available to the Copilot Chat agent. Keep it to about 10 for reliable tool selection |
 
-### 4.3 (Optional) Refresh the tool list
+### 4.4 (Optional) Refresh the tool list
 
 The repository ships `src/tools/ha-cowork-tools.json`, a tool list from a recent ha-mcp version, so you can build right away.
 
@@ -138,7 +162,7 @@ Unblock-File .\update-tools.ps1   # once, after downloading
 
 The script reads `webhookUrl` from `config.json`, fetches the tool list from your server, keeps a backup (`ha-cowork-tools.json.bak`), and reports which tools were added or removed. It warns if a tool in `chatTools` no longer exists.
 
-### 4.4 Build
+### 4.5 Build
 
 ```powershell
 Unblock-File .\build.ps1   # once, after downloading
@@ -175,6 +199,10 @@ Send `-developer off` or start a new chat to leave developer mode.
 
 ## 7. Updating
 
+**With the web configurator:** open it again, change what you need, check that the version is higher than your last upload, download, and upload the new zip in Cowork. Test in a **new** chat.
+
+**With the scripts:**
+
 1. Edit files in `src\` or `config.json` (never in `build\`, which is overwritten)
 2. Raise `version` in `config.json`
 3. Run `.\build.ps1`
@@ -186,14 +214,16 @@ Send `-developer off` or start a new chat to leave developer mode.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Upload fails: *Required properties are missing: `mcpToolDescription`* | Cowork's validator requires it, although Cowork discovers tools live | Keep `src/tools/ha-cowork-tools.json` ([4.3](#43-dump-your-servers-tool-list)) |
+| Upload fails: *Required properties are missing: `mcpToolDescription`* | Cowork's validator requires it, although Cowork discovers tools live | Keep `src/tools/ha-cowork-tools.json` ([4.4](#44-optional-refresh-the-tool-list)) |
 | Home Assistant shows up in Copilot Chat only as a **data source** | Chat doesn't expose `agentConnectors` as tools, or the package was only installed via Cowork | Install via Agents Toolkit or Teams ([step 5](#copilot-chat)) and use the **agent** |
 | Chat agent says it has no Home Assistant tools | Dynamic discovery (`"functions": []`) doesn't work for this setup in Chat | The build pins `chatTools`. Check the debug card for **Matched** functions |
-| Build: *chatTools not found in ha-cowork-tools.json* | Tool renamed in your ha-mcp version | Refresh the dump ([4.3](#43-dump-your-servers-tool-list)) or fix the name in `config.json` |
+| Build: *chatTools not found in ha-cowork-tools.json* | Tool renamed in your ha-mcp version | Refresh the dump ([4.4](#44-optional-refresh-the-tool-list)) or fix the name in `config.json` |
 | Build: *webhookUrl must look like...* | Placeholder or malformed URL | Use the full `https://.../api/webhook/<id>` URL |
 | Changes don't appear | Version not raised, or old conversation | Raise `version`, reinstall, start a new chat |
 | Cowork shows versions like 3.0.0 | Cowork's own upload counter | Cosmetic. The debug card shows the real app version |
-| Upload fails on file structure | Zip contains a folder instead of files at the root | Always build with `build.ps1` |
+| Upload fails on file structure | Zip contains a folder instead of files at the root | Always build with the web configurator or `build.ps1`, never zip by hand |
+| Configurator: *Your browser couldn't reach the server* | Home Assistant blocks requests from other websites (CORS) | Keep the bundled tool list, or upload a file made with `update-tools.ps1` ([4.1](#41-web-configurator-no-scripts)) |
+| Configurator: *Open this page from its website...* | `index.html` was opened as a file | Use the hosted page, or `python -m http.server` ([4.1](#41-web-configurator-no-scripts)) |
 
 ---
 
@@ -201,6 +231,7 @@ Send `-developer off` or start a new chat to leave developer mode.
 
 - This setup uses **authorization type `None`**: the **webhook URL is the only credential** for your Home Assistant. Treat it like a password.
 - `config.json`, `build\` and `*.zip` contain the URL. They're in `.gitignore`. Never commit or share them.
+- The web configurator never uploads the URL. It only stores it in your browser's local storage if you tick **Remember the URL in this browser**. Don't tick it on a shared computer.
 - **Regenerate the webhook ID** in ha-mcp if the URL may have leaked (chats, screenshots, shared zips), then update `config.json`, raise the version and rebuild.
 - Consider a **read-only URL** (`/readonly`) or a Chat tool set without `ha_call_service` if you only need to read data.
 - The Chat agent is instructed to ask for confirmation before changing automations, scripts, dashboards or configuration.

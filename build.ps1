@@ -4,6 +4,9 @@
 # Generated at build time (do not put these in src):
 #   ai-plugin.json            Copilot Chat action, pinned to config.chatTools
 #   tools/ha-chat-tools.json  subset of tools/home-assistant-tools.json
+#
+# index.html (the web configurator) builds the same package in the browser.
+# Keep the two in sync when changing validation or generated files.
 
 #Requires -Version 7
 

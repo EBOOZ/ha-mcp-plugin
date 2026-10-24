@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Assistant Plugin Configurator</title>
+<meta name="description" content="Configure and download the Home Assistant plugin for Microsoft 365 Copilot Cowork and Copilot Chat, without scripts.">
+<link rel="icon" href="src/color.png">
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --card: #ffffff;
+    --text: #1b1f24;
+    --muted: #5b6573;
+    --border: #d9dee5;
+    --accent: #0b74c4;
+    --accent-text: #ffffff;
+    --ok: #1a7f37;
+    --warn: #9a6700;
+    --warn-bg: #fff8e1;
+    --err: #c62828;
+    --err-bg: #fdecea;
+    --tag: #eef2f6;
+    --focus: #0b74c4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111418;
+      --card: #1a1f25;
+      --text: #e6e9ee;
+      --muted: #9aa4b2;
+      --border: #2d343d;
+      --accent: #4aa8ec;
+      --accent-text: #0d1115;
+      --ok: #4ac26b;
+      --warn: #e3b341;
+      --warn-bg: #2b2412;
+      --err: #ff7b72;
+      --err-bg: #2d1615;
+      --tag: #252c34;
+      --focus: #4aa8ec;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111418;
+    --card: #1a1f25;
+    --text: #e6e9ee;
+    --muted: #9aa4b2;
+    --border: #2d343d;
+    --accent: #4aa8ec;
+    --accent-text: #0d1115;
+    --ok: #4ac26b;
+    --warn: #e3b341;
+    --warn-bg: #2b2412;
+    --err: #ff7b72;
+    --err-bg: #2d1615;
+    --tag: #252c34;
+    --focus: #4aa8ec;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; gap: 16px; align-items: center; margin-bottom: 24px; }
+  header img { width: 56px; height: 56px; border-radius: 12px; }
+  h1 { font-size: 22px; margin: 0; }
+  header p { margin: 2px 0 0; color: var(--muted); }
+  section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  h2 { font-size: 16px; margin: 0 0 4px; display: flex; gap: 10px; align-items: center; }
+  h2 .step {
+    flex: none; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--accent); color: var(--accent-text);
+    font-size: 13px; display: grid; place-items: center;
+  }
+  .hint { color: var(--muted); margin: 0 0 12px; font-size: 14px; }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  input[type=text], input[type=url], input[type=search] {
+    width: 100%; padding: 9px 11px; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  input[aria-invalid=true] { border-color: var(--err); }
+  .check { display: flex; gap: 8px; align-items: center; font-weight: normal; margin-top: 10px; }
+  .field-msg { font-size: 13px; margin-top: 4px; min-height: 1.2em; }
+  .field-msg.err { color: var(--err); }
+  .field-msg.ok { color: var(--ok); }
+  button {
+    font: inherit; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--card); color: var(--text);
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary {
+    background: var(--accent); border-color: var(--accent); color: var(--accent-text);
+    font-weight: 600; padding: 11px 20px;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .source { font-size: 14px; color: var(--muted); margin: 0 0 10px; }
+  .tool-head { display: flex; gap: 8px; align-items: center; margin: 12px 0 8px; flex-wrap: wrap; }
+  .tool-head input { flex: 1 1 200px; }
+  .count { font-size: 14px; color: var(--muted); white-space: nowrap; }
+  .count.warn { color: var(--warn); }
+  .tools {
+    max-height: 360px; overflow-y: auto; border: 1px solid var(--border);
+    border-radius: 8px; padding: 4px 0; margin: 0; list-style: none;
+  }
+  .tools li label {
+    display: flex; gap: 10px; align-items: flex-start; font-weight: normal;
+    margin: 0; padding: 6px 12px; cursor: pointer;
+  }
+  .tools li label:hover { background: var(--tag); }
+  .tools input { margin-top: 4px; flex: none; }
+  .tools .name { font-family: ui-monospace, Consolas, monospace; font-size: 13px; word-break: break-all; }
+  .tools .title { color: var(--muted); font-size: 13px; }
+  .tag {
+    font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--tag);
+    color: var(--muted); margin-left: 6px; white-space: nowrap;
+  }
+  .tag.write { color: var(--warn); }
+  .notice { border-radius: 8px; padding: 10px 12px; font-size: 14px; margin: 10px 0 0; }
+  .notice.warn { background: var(--warn-bg); color: var(--warn); }
+  .notice.err { background: var(--err-bg); color: var(--err); }
+  .notice:empty { display: none; }
+  .result { font-size: 14px; margin-top: 12px; }
+  .result.ok { color: var(--ok); }
+  .result.err { color: var(--err); }
+  ol.install { margin: 8px 0 0; padding-left: 20px; }
+  ol.install li { margin-bottom: 6px; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: var(--tag); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+  footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 24px; }
+  footer a { color: var(--accent); }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="src/color.png" alt="">
+    <div>
+      <h1>Home Assistant for Microsoft 365 Copilot</h1>
+      <p>Configure the plugin and download it, ready to upload to Copilot Cowork.</p>
+    </div>
+  </header>
+
+  <p id="load-error" class="notice err" role="alert"></p>
+
+  <section>
+    <h2><span class="step">1</span>Webhook URL</h2>
+    <p class="hint">The remote webhook URL of your ha-mcp server. In the HA Custom Component, open <b>Configure</b> and copy the <b>webhook URL for remote clients</b>.</p>
+    <label for="url">Webhook URL</label>
+    <input id="url" type="url" autocomplete="off" spellcheck="false" placeholder="https://<your-ha-domain>/api/webhook/<webhook-id>">
+    <div id="url-msg" class="field-msg" aria-live="polite"></div>
+    <label class="check"><input id="remember" type="checkbox"> Remember the URL in this browser</label>
+    <p class="hint" style="margin:6px 0 0">The URL is the only credential for your Home Assistant. It stays in this browser and is only sent to your own server, when you load its tool list.</p>
+  </section>
+
+  <section>
+    <h2><span class="step">2</span>Version</h2>
+    <p class="hint">Raise it on every upload, or Microsoft 365 won't pick up the change.</p>
+    <label for="version">App version</label>
+    <input id="version" type="text" inputmode="decimal" autocomplete="off" placeholder="1.0.0" style="max-width:160px">
+    <div id="version-msg" class="field-msg" aria-live="polite"></div>
+  </section>
+
+  <section>
+    <h2><span class="step">3</span>Copilot Chat tools</h2>
+    <p class="hint">Cowork discovers all tools live from your server. The Copilot Chat agent only gets the tools you pick here. Keep it to about 10 so it chooses the right tool reliably.</p>
+    <p id="source" class="source">Loading tool list…</p>
+    <div class="row">
+      <button id="load-server" type="button">Load tools from my server</button>
+      <button id="load-file" type="button">Upload a tools file</button>
+      <button id="load-bundled" type="button" hidden>Use the bundled list</button>
+      <input id="file" type="file" accept=".json,application/json" class="visually-hidden" tabindex="-1">
+    </div>
+    <p id="source-msg" class="notice warn" role="status"></p>
+    <div class="tool-head">
+      <label for="filter" class="visually-hidden">Filter tools</label>
+      <input id="filter" type="search" placeholder="Filter tools">
+      <span id="count" class="count" aria-live="polite"></span>
+      <button id="reset" type="button">Defaults</button>
+    </div>
+    <ul id="tools" class="tools" aria-label="Copilot Chat tools"></ul>
+  </section>
+
+  <section>
+    <h2><span class="step">4</span>Download and install</h2>
+    <button id="download" type="button" class="primary">Download ha-mcp-plugin.zip</button>
+    <div id="result" class="result" aria-live="polite"></div>
+    <ol class="install">
+      <li>In Copilot Cowork, go to <b>Customize</b> → <b>Plugins</b> → <b>Upload plugin</b> and choose <code>ha-mcp-plugin.zip</code>.</li>
+      <li>Share it with <b>Only you</b>, and select <b>Apply</b>.</li>
+      <li>After a few minutes, the <b>Home Assistant</b> agent also shows up in the Copilot Chat agents pane.</li>
+      <li>To change a setting later, come back here, change it, raise the version and upload the new zip.</li>
+    </ol>
+  </section>
+
+  <footer>
+    Built on <a href="https://github.com/homeassistant-ai/ha-mcp">ha-mcp</a>.
+    Prefer scripts? See <a href="https://github.com/EBOOZ/ha-mcp-plugin#4-configure-and-build">build.ps1</a>.
+  </footer>
+</main>
+
+<script>
+"use strict";
+
+// --- Constants (keep in sync with build.ps1) ---------------------------------
+const URL_PATTERN     = /^https:\/\/[^/\s<>]+\/api\/webhook\/[^/\s<>]+$/;
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+const SRC_FILES       = ["manifest.json", "declarativeAgent.json", "color.png", "outline.png", "tools/ha-cowork-tools.json"];
+const MAX_CHAT_TOOLS  = 10;
+const STORE           = "ha-mcp-plugin.";
+
+const $ = id => document.getElementById(id);
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+const state = {
+  src: {},            // path -> Uint8Array, from ./src
+  defaults: [],       // chatTools from config.example.json
+  tools: [],          // the tool list that is packaged as tools/ha-cowork-tools.json
+  order: [],          // display order: selected tools first
+  bundledTools: [],
+  custom: false,      // true when the tool list did not come from ./src
+  selected: new Set(),
+};
+
+// --- Browser storage (optional) ----------------------------------------------
+function load(key) { try { return localStorage.getItem(STORE + key); } catch { return null; } }
+function save(key, value) {
+  try { value == null ? localStorage.removeItem(STORE + key) : localStorage.setItem(STORE + key, value); } catch {}
+}
+
+// --- Validation --------------------------------------------------------------
+function checkUrl(show) {
+  const url = $("url").value.trim();
+  const ok = URL_PATTERN.test(url);
+  $("url").setAttribute("aria-invalid", String(show && !ok));
+  $("url-msg").className = "field-msg " + (ok ? "ok" : show ? "err" : "");
+  $("url-msg").textContent = ok ? "Looks good." : show ? "Must look like https://<domain>/api/webhook/<id>" : "";
+  return ok ? url : null;
+}
+
+function checkVersion(show) {
+  const v = $("version").value.trim();
+  const ok = VERSION_PATTERN.test(v);
+  const last = load("lastVersion");
+  $("version").setAttribute("aria-invalid", String(show && !ok));
+  $("version-msg").className = "field-msg " + (ok ? "" : show ? "err" : "");
+  $("version-msg").textContent = !ok ? (show ? "Must look like 1.0.4" : "")
+    : last && compareVersions(v, last) <= 0 ? `Your last download was ${last}. Use a higher version.`
+    : last ? `Last download: ${last}` : "";
+  return ok ? v : null;
+}
+
+function compareVersions(a, b) {
+  const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] - pb[i];
+  return 0;
+}
+
+function bumpVersion(v) {
+  const p = v.split(".").map(Number);
+  p[2]++;
+  return p.join(".");
+}
+
+// --- Tool list ---------------------------------------------------------------
+function setTools(tools, sourceText, custom) {
+  state.tools = tools;
+  state.custom = custom;
+  $("source").textContent = sourceText;
+  $("load-bundled").hidden = !custom;
+
+  const names = new Set(tools.map(t => t.name));
+  const missing = [...state.selected].filter(n => !names.has(n));
+  missing.forEach(n => state.selected.delete(n));
+  $("source-msg").textContent = missing.length
+    ? `Not on this tool list, so removed from your selection: ${missing.join(", ")}` : "";
+  state.order = [...tools.filter(t => state.selected.has(t.name)), ...tools.filter(t => !state.selected.has(t.name))];
+  renderTools();
+}
+
+function renderTools() {
+  const filter = $("filter").value.trim().toLowerCase();
+  const list = $("tools");
+  list.replaceChildren();
+  for (const tool of state.order) {
+    const title = tool.annotations?.title || tool.title || "";
+    if (filter && !tool.name.toLowerCase().includes(filter) && !title.toLowerCase().includes(filter)) continue;
+
+    const li = document.createElement("li");
+    const label = document.createElement("label");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = state.selected.has(tool.name);
+    box.addEventListener("change", () => {
+      box.checked ? state.selected.add(tool.name) : state.selected.delete(tool.name);
+      saveSelection();
+      updateCount();
+    });
+    const text = document.createElement("span");
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = tool.name;
+    text.append(name);
+    if (tool.annotations?.readOnlyHint === false || tool.annotations?.destructiveHint) {
+      const tag = document.createElement("span");
+      tag.className = "tag write";
+      tag.textContent = "can change things";
+      text.append(tag);
+    }
+    if (title) {
+      const t = document.createElement("div");
+      t.className = "title";
+      t.textContent = title;
+      text.append(t);
+    }
+    label.append(box, text);
+    li.append(label);
+    list.append(li);
+  }
+  if (!list.children.length) {
+    const li = document.createElement("li");
+    li.className = "hint";
+    li.style.padding = "6px 12px";
+    li.textContent = state.tools.length ? "No tools match the filter." : "No tools loaded.";
+    list.append(li);
+  }
+  updateCount();
+}
+
+function updateCount() {
+  const n = state.selected.size;
+  $("count").textContent = `${n} selected` + (n > MAX_CHAT_TOOLS ? `, more than ${MAX_CHAT_TOOLS}` : "");
+  $("count").className = "count" + (n === 0 || n > MAX_CHAT_TOOLS ? " warn" : "");
+}
+
+function saveSelection() { save("chatTools", JSON.stringify([...state.selected])); }
+
+function parseTools(text) {
+  const tools = JSON.parse(text).tools;
+  if (!Array.isArray(tools) || !tools.length || !tools.every(t => t && typeof t.name === "string")) {
+    throw new Error("The file has no tools array with named tools.");
+  }
+  return tools;
+}
+
+// --- Load tools from the ha-mcp server (same handshake as update-tools.ps1) --
+async function mcp(url, body, sessionId) {
+  const headers = { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" };
+  if (sessionId) headers["Mcp-Session-Id"] = sessionId;
+  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`Server answered HTTP ${res.status}`);
+  return res;
+}
+
+async function readMcp(res) {
+  let text = await res.text();
+  if ((res.headers.get("Content-Type") || "").includes("event-stream")) {
+    text = text.split("\n").filter(l => l.startsWith("data:")).map(l => l.slice(5).trim()).pop() || "";
+  }
+  const json = JSON.parse(text);
+  if (json.error) throw new Error(`MCP error ${json.error.code}: ${json.error.message}`);
+  return json;
+}
+
+async function loadFromServer() {
+  const url = checkUrl(true);
+  if (!url) { $("url").focus(); return; }
+  const button = $("load-server");
+  button.disabled = true;
+  button.textContent = "Connecting…";
+  $("source-msg").textContent = "";
+  try {
+    const init = await mcp(url, { jsonrpc: "2.0", id: 1, method: "initialize", params: {
+      protocolVersion: "2025-06-18", capabilities: {},
+      clientInfo: { name: "ha-mcp-plugin-configurator", version: "1.0" } } });
+    const server = (await readMcp(init)).result?.serverInfo;
+    const sessionId = init.headers.get("Mcp-Session-Id");
+    await mcp(url, { jsonrpc: "2.0", method: "notifications/initialized" }, sessionId);
+
+    let tools = [], cursor = null, id = 2;
+    do {
+      const params = cursor ? { cursor } : {};
+      const res = await readMcp(await mcp(url, { jsonrpc: "2.0", id: id++, method: "tools/list", params }, sessionId));
+      tools = tools.concat(res.result.tools || []);
+      cursor = res.result.nextCursor;
+    } while (cursor);
+    if (!tools.length) throw new Error("The server returned no tools.");
+
+    const name = server ? `${server.name} ${server.version}` : "your server";
+    setTools(tools, `Loaded from ${name}: ${tools.length} tools.`, true);
+  } catch (e) {
+    $("source-msg").textContent = (e instanceof TypeError
+      ? "Your browser couldn't reach the server. Home Assistant usually blocks requests from other websites (CORS). "
+      : `Couldn't load the tool list: ${e.message}. `)
+      + "Keep the bundled list, or upload a tools file made with update-tools.ps1.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "Load tools from my server";
+  }
+}
+
+async function loadFromFile(file) {
+  $("source-msg").textContent = "";
+  try {
+    const tools = parseTools(await file.text());
+    setTools(tools, `Loaded from ${file.name}: ${tools.length} tools.`, true);
+  } catch (e) {
+    $("source-msg").textContent = `Couldn't read ${file.name}: ${e.message}`;
+  }
+}
+
+// --- Build the package (mirrors build.ps1) -----------------------------------
+function buildPackage(url, version, chatTools) {
+  const files = new Map();
+  for (const path of SRC_FILES) files.set(path, state.src[path]);
+  if (state.custom) files.set("tools/ha-cowork-tools.json", enc.encode(JSON.stringify({ tools: state.tools }, null, 2)));
+
+  const selected = state.tools.filter(t => chatTools.includes(t.name));
+  const missing = chatTools.filter(n => !state.tools.some(t => t.name === n));
+  if (missing.length) throw new Error(`chatTools not found in the tool list: ${missing.join(", ")}`);
+
+  files.set("tools/ha-chat-tools.json", enc.encode(JSON.stringify({ tools: selected }, null, 2)));
+  const plugin = {
+    "$schema": "https://developer.microsoft.com/json-schemas/copilot/plugin/v2.4/schema.json",
+    schema_version: "v2.4",
+    name_for_human: "Home Assistant",
+    description_for_human: "Home Assistant via ha-mcp",
+    namespace: "homeassistant",
+    functions: selected.map(t => ({ name: t.name, description: String(t.description ?? "").slice(0, 1000) })),
+    runtimes: [{
+      type: "RemoteMCPServer",
+      auth: { type: "None" },
+      spec: { url: "{{HA_WEBHOOK_URL}}", mcp_tool_description: { file: "tools/ha-chat-tools.json" } },
+      run_for_functions: chatTools,
+    }],
+  };
+  files.set("ha-mcp-plugin.json", enc.encode(JSON.stringify(plugin, null, 2)));
+
+  // Fill placeholders, validate JSON
+  for (const [path, data] of files) {
+    if (!path.endsWith(".json")) continue;
+    const name = path.split("/").pop();
+    const text = dec.decode(data).replaceAll("{{HA_WEBHOOK_URL}}", url).replaceAll("{{VERSION}}", version);
+    const left = text.match(/\{\{[A-Z_]+\}\}/);
+    if (left) throw new Error(`Unfilled placeholder in ${name}: ${left[0]}`);
+    try { JSON.parse(text); } catch (e) { throw new Error(`Invalid JSON in ${name}: ${e.message}`); }
+    files.set(path, enc.encode(text));
+  }
+  return zip(files);
+}
+
+// --- Minimal zip writer (stored, everything at the root) ---------------------
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(data) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function zip(files) {
+  const now = new Date();
+  const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  const parts = [], central = [];
+  let offset = 0;
+
+  for (const [path, data] of files) {
+    const name = enc.encode(path);
+    const crc = crc32(data);
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);
+    local.setUint16(4, 20, true);
+    local.setUint16(6, 0x0800, true);          // UTF-8 names
+    local.setUint16(8, 0, true);               // stored
+    local.setUint16(10, time, true);
+    local.setUint16(12, date, true);
+    local.setUint32(14, crc, true);
+    local.setUint32(18, data.length, true);
+    local.setUint32(22, data.length, true);
+    local.setUint16(26, name.length, true);
+    parts.push(new Uint8Array(local.buffer), name, data);
+
+    const entry = new DataView(new ArrayBuffer(46));
+    entry.setUint32(0, 0x02014b50, true);
+    entry.setUint16(4, 20, true);
+    entry.setUint16(6, 20, true);
+    entry.setUint16(8, 0x0800, true);
+    entry.setUint16(10, 0, true);
+    entry.setUint16(12, time, true);
+    entry.setUint16(14, date, true);
+    entry.setUint32(16, crc, true);
+    entry.setUint32(20, data.length, true);
+    entry.setUint32(24, data.length, true);
+    entry.setUint16(28, name.length, true);
+    entry.setUint32(42, offset, true);
+    central.push(new Uint8Array(entry.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+
+  const size = central.reduce((n, p) => n + p.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, files.size, true);
+  end.setUint16(10, files.size, true);
+  end.setUint32(12, size, true);
+  end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: "application/zip" });
+}
+
+// --- Download ----------------------------------------------------------------
+function download() {
+  const result = $("result");
+  const url = checkUrl(true), version = checkVersion(true);
+  const chatTools = state.tools.map(t => t.name).filter(n => state.selected.has(n));
+  try {
+    if (!url) throw new Error("Fill in a valid webhook URL (step 1).");
+    if (!version) throw new Error("Fill in a valid version (step 2).");
+    if (!chatTools.length) throw new Error("Select at least one Copilot Chat tool (step 3).");
+
+    const blob = buildPackage(url, version, chatTools);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "ha-mcp-plugin.zip";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+
+    save("lastVersion", version);
+    save("url", $("remember").checked ? url : null);
+    result.className = "result ok";
+    result.textContent = `Downloaded ha-mcp-plugin.zip, version ${version}, with ${chatTools.length} Chat tools. Upload it in Cowork.`;
+    $("version").value = bumpVersion(version);
+    checkVersion(false);
+  } catch (e) {
+    result.className = "result err";
+    result.textContent = e.message;
+  }
+}
+
+// --- Start -------------------------------------------------------------------
+async function init() {
+  try {
+    const [config, ...data] = await Promise.all([
+      fetch("config.example.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }),
+      ...SRC_FILES.map(p => fetch("src/" + p).then(r => {
+        if (!r.ok) throw new Error(`src/${p}: HTTP ${r.status}`);
+        return r.arrayBuffer();
+      })),
+    ]);
+    SRC_FILES.forEach((p, i) => state.src[p] = new Uint8Array(data[i]));
+    state.defaults = config.chatTools || [];
+    state.bundledTools = parseTools(dec.decode(state.src["tools/ha-cowork-tools.json"]));
+  } catch (e) {
+    $("load-error").textContent = location.protocol === "file:"
+      ? "Open this page from its website, or from a local web server (for example: python -m http.server), not as a file. Browsers block it from reading the plugin files."
+      : `Couldn't load the plugin files (${e.message}). Reload the page to try again.`;
+    $("source").textContent = "No tool list loaded.";
+    $("download").disabled = true;
+    return;
+  }
+
+  const saved = load("chatTools");
+  try { state.selected = new Set(saved ? JSON.parse(saved) : state.defaults); } catch { state.selected = new Set(state.defaults); }
+  setTools(state.bundledTools, `Bundled list: ${state.bundledTools.length} tools from a recent ha-mcp version.`, false);
+
+  const url = load("url");
+  if (url) { $("url").value = url; $("remember").checked = true; checkUrl(false); }
+  const last = load("lastVersion");
+  $("version").value = last ? bumpVersion(last) : "1.0.0";
+  checkVersion(false);
+}
+
+$("url").addEventListener("input", () => checkUrl(false));
+$("url").addEventListener("blur", () => checkUrl($("url").value.trim() !== ""));
+$("remember").addEventListener("change", () => { if (!$("remember").checked) save("url", null); });
+$("version").addEventListener("input", () => checkVersion(false));
+$("filter").addEventListener("input", renderTools);
+$("reset").addEventListener("click", () => {
+  state.selected = new Set(state.defaults);
+  saveSelection();
+  setTools(state.tools, $("source").textContent, state.custom);
+});
+$("load-server").addEventListener("click", loadFromServer);
+$("load-file").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", e => { if (e.target.files[0]) loadFromFile(e.target.files[0]); e.target.value = ""; });
+$("load-bundled").addEventListener("click", () =>
+  setTools(state.bundledTools, `Bundled list: ${state.bundledTools.length} tools from a recent ha-mcp version.`, false));
+$("download").addEventListener("click", download);
+
+init();
+</script>
+</body>
+</html>
